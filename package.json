@@ -1,0 +1,11 @@
+{
+    "name"            : "astro-add-global",
+    "version"         : "0.1.0",
+    "type"            : "module",
+    "homepage"        : "https://github.com/lilnasy/astro-add-global",
+    "repository"      : { "type": "git", "url": "https://github.com/lilnasy/astro-add-global" },
+    "bugs"            : { "url": "https://github.com/lilnasy/astro-add-global/issues" },
+    "files"           : [ "index.js" ],
+    "keywords"        : [ "astro", "withastro", "integration", "global", "dev", "adapter", "runtime", "web-api" ],
+    "devDependencies" : { "astro": "2.4.5" }
+}
