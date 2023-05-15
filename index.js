@@ -4,7 +4,7 @@
  * @param { { dev ?: boolean, build ?: boolean} }
  * @returns { import('astro').AstroIntegration | undefined }
  */
-export default function addGlobal(key, value, { dev = true, build = false }) {
+export default function addGlobal(key, value, { dev = true, build = false } = {}) {
 
 	if (typeof key !== 'string' && typeof key !== 'symbol') {
 		console.error('\nastro-add-global will not add ', key, ' because its key is of an invalid type: ' + typeof key + '.\nThe key must either be a string or a symbol.\n')
