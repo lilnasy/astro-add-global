@@ -7,24 +7,23 @@
 export default function addGlobal(key, value, { dev = true, build = false }) {
 
 	if (typeof key !== 'string' && typeof key !== 'symbol') {
-		console.error('\naddGlobal will not run because the key is of an invalid type: ' + typeof key + '.\n\nThe key must either be a string or a symbol.\n')
+		console.error('\nastro-add-global will not add ', key, ' because its key is of an invalid type: ' + typeof key + '.\nThe key must either be a string or a symbol.\n')
 		return undefined
 	}
 	
 	const serializedKey = failableApplication(serialize, key)
 
 	if ('error' in serializedKey) {
-		if (typeof serializedKey.error === 'symbol') console.error('\naddGlobal will not run because the key was a symbol without a description.\n\nA symbol must have a description to be serialized.\n\nConsider using `Symbol.for("description")` instead.\n')
-		else console.error('addGlobal will not run because the key could not be serialized.')
+		if (typeof serializedKey.error === 'symbol') console.error('\nastro-add-global will not add ', key,' because its key is non-registered symbol.\n\nA symbol must be registered to be serialized.\n\nConsider using `Symbol.for("description")` instead.\n')
+		else console.error('astro-add-global will not add a global because this key could not be serialized:', key)
 		return undefined
 	}
 	
 	const serializedValue = failableApplication(serialize, value)
 
 	if ('error' in serializedValue) {
-		if (typeof serializedValue.error === 'symbol') console.error('\naddGlobal will not run because the the value contained a symbol without a description.\n\nA symbol must have a description to be serialized.\n\nConsider using `Symbol.for("description")` instead.\n')
-		else if (typeof serializedValue.error === 'function') console.error('\naddGlobal will not run because one of the values contained a named function.\n\nA function must be anonymous to be serialized.\n\nConsider using `' + serializedValue.error.name + ': () => { ... }` instead.\n')
-		else console.error('\naddGlobal will not run because one of the values is of an invalid type: ' + typeof serializedValue.error + '.\n')
+		if (typeof serializedValue.error === 'symbol') console.error('\nastro-add-global will not add ' + serializedKey.ok + ' because the value contains a non-regisstered symbol.\n\nA symbol must be registered to be serialized.\n\nConsider using `Symbol.for("description")` instead.\n')
+		else console.error('\nastro-add-global will not add ' + serializedKey.ok + ' because the value contains an invalid type: ' + typeof serializedValue.error + '.', serializedValue.error)
 		return undefined
 	}
 
@@ -79,7 +78,7 @@ function failableApplication(failableFun, input) {
  * @param { unknown } value
  * @returns { string }
  */
-function serialize(value) {
+export function serialize(value) {
     
 	if (value === undefined)         return 'undefined'
 	if (value === null)              return 'null'
@@ -89,33 +88,63 @@ function serialize(value) {
 	if (Array.isArray(value))        return '[' + value.map(serialize).join(', ') + ']'
 	
 	if (typeof value === 'function') {
+		if (value === Function.prototype) return 'Function.prototype'
 		const serializedFun = value.toString()
-		if (serializedFun.startsWith(value.name)) throw value
-		return serializedFun
+		if (serializedFun.includes('[native code]')) return value.name
+		else return serializedFun
 	}
 
 	if (typeof value === 'symbol') {
-		const description = value.description
-		if (description === undefined) throw value
-		return 'Symbol.for(' + JSON.stringify(description) + ')'
+		const key = Symbol.keyFor(value)
+		if (key === undefined) {
+			// built-in symbols (Symbol.iterator, Symbol.species, ...)
+			if (value.description) return value.description
+			throw value
+		}
+		return 'Symbol.for(' + JSON.stringify(key) + ')'
 	}
 	
 	if (Object.getPrototypeOf(value) === Object.getPrototypeOf({})) {
 		
 		const keys = Object.keys(value)
 		const keyValueSerialized =
-			keys.map(key =>
-				key + ': ' + serialize(value[key])
-			).join(', ')
+			keys.map(key => {
+				const { set, get } = Object.getOwnPropertyDescriptor(value, key)
+				
+				if (set !== undefined && get !== undefined)
+					return get.toString() + ', ' + set.toString()
+
+				if (set !== undefined)return set.toString()
+				if (get !== undefined)return get.toString()
+				
+				const fieldValue = value[key]
+				if (typeof fieldValue === 'function') {}
+				const serializedFun = serialize(fieldValue)
+				// callable property syntax: const x = { f() {} }; const y = { async f() {} }
+				if (/^(async\s+)?(?!async)(?!function)\w+\s*\(/.test(serializedFun)) return serializedFun
+				return key + ': ' + serializedFun
+			}).join(', ')
 		
 		const symbolKeys = Object.getOwnPropertySymbols(value)
 		const symbolKeyValueSerialized =
-			symbolKeys.map(key =>
-				'[' + serialize(key) + ']: ' + serialize(value[key])
-			).join(', ')
+			symbolKeys
+			.map(key => {
+				const { set, get } = Object.getOwnPropertyDescriptor(value, key)
+				
+				if (set !== undefined && get !== undefined)
+					return get.toString() + ', ' + set.toString()
+
+				if (set !== undefined)return set.toString()
+				if (get !== undefined)return get.toString()
+				
+				return '[' + serialize(key) + ']: ' + serialize(value[key])
+			})
+			.join(', ')
 		
-		if (symbolKeys.length === 0) return '{ '+ keyValueSerialized + ' }'
-		else                         return '{ '+ keyValueSerialized + ', ' + symbolKeyValueSerialized + ' }'
+		if (keys.length === 0 && symbolKeys.length === 0) return '{}'
+		if (symbolKeys.length === 0)                      return '{ ' + keyValueSerialized + ' }'
+		if (keys.length === 0)                            return '{ ' + symbolKeyValueSerialized + ' }'
+		else                                              return '{ ' + keyValueSerialized + ', ' + symbolKeyValueSerialized + ' }'
 	
 	}
 
